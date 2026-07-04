@@ -32,8 +32,17 @@ fun MatchesScreen(
     LaunchedEffect(Unit) {
         val user = repository.getCurrentFirebaseUser() ?: return@LaunchedEffect
         repository.getUserMatches(user.uid).onSuccess { matchList ->
-            matches = matchList
-            matchList.forEach { match ->
+            // Deduplicate: keep only the first match per unique (partnerId, requestId) pair
+            val seenPairs = mutableSetOf<Pair<String, Long>>()
+            matches = matchList.filter { match ->
+                val partnerId = if (match.user1Id == user.uid) match.user2Id else match.user1Id
+                val key = partnerId to match.requestId
+                if (key in seenPairs) false else {
+                    seenPairs.add(key)
+                    true
+                }
+            }
+            matches.forEach { match ->
                 val partnerId = if (match.user1Id == user.uid) match.user2Id else match.user1Id
                 repository.getUserProfile(partnerId).onSuccess { profile ->
                     partners = partners + (partnerId to profile)

@@ -34,6 +34,10 @@ class FirebaseService {
 
     fun signOut() = auth.signOut()
 
+    suspend fun deleteCurrentUser() {
+        auth.currentUser?.delete()?.await()
+    }
+
     suspend fun sendPasswordReset(email: String) {
         auth.sendPasswordResetEmail(email).await()
     }

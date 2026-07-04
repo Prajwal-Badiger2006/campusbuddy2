@@ -16,8 +16,10 @@ class CampusBuddyRepository {
 
     suspend fun signup(fullName: String, email: String, password: String, regNumber: String,
                         collegeName: String, department: String, year: String): Result<UserProfile> {
+        var authCreated = false
         return try {
             val user = firebase.signupWithEmail(email, password)
+            authCreated = true
             val profile = UserProfile(
                 id = user.uid,
                 fullName = fullName,
@@ -29,11 +31,22 @@ class CampusBuddyRepository {
                 status = UserStatus.UNVERIFIED,
                 role = UserRole.USER
             )
-            kotlinx.coroutines.withTimeout(10000) {
-                firebase.createUserProfile(profile)
-            }
+            // No artificial timeout — let Firebase SDK handle its own timeouts.
+            // The caller (SignupScreen) wraps this in withTimeout(60_000) for safety.
+            firebase.createUserProfile(profile)
             Result.success(profile)
         } catch (e: Exception) {
+            // Cleanup: if Auth was created but Firestore write failed, delete Auth user
+            // so the user can retry registration with the same email.
+            if (authCreated) {
+                try {
+                    firebase.deleteCurrentUser()
+                } catch (_: Exception) {
+                    // Best-effort cleanup — ignore secondary failures
+                }
+            }
+            // Rethrow cancellation so the caller's withTimeout catches it properly
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Result.failure(e)
         }
     }
@@ -135,6 +148,12 @@ class CampusBuddyRepository {
     // Partner Responses
     suspend fun respondToRequest(requestId: Long, responderId: String): Result<Unit> {
         return try {
+            // Prevent duplicate responses: check if user already responded
+            val existingResponse = firebase.getUserResponseForRequest(responderId, requestId)
+            if (existingResponse != null) {
+                return Result.success(Unit) // Already responded
+            }
+
             val response = PartnerResponse(
                 requestId = requestId,
                 responderId = responderId,
@@ -171,24 +190,51 @@ class CampusBuddyRepository {
 
     suspend fun acceptResponse(response: PartnerResponse, requestId: Long): Result<Unit> {
         return try {
+            // Idempotency check: skip if already accepted
+            val currentResponse = firebase.getUserResponseForRequest(response.responderId, requestId)
+            if (currentResponse?.status == ResponseStatus.ACCEPTED) {
+                return Result.success(Unit) // Already accepted
+            }
+
             firebase.updatePartnerResponse(response.id, mapOf("status" to ResponseStatus.ACCEPTED.name))
             // Get request
             val request = firebase.getPartnerRequestById(requestId)
-            // Create match
-            val match = Match(
-                user1Id = request?.creatorId ?: "",
-                user2Id = response.responderId,
-                requestId = requestId,
-                matchScore = 0.85f
-            )
-            firebase.createMatch(match)
-            // Create conversation
-            val conversation = Conversation(
-                isGroup = false,
-                createdBy = request?.creatorId ?: "",
-                memberIds = listOf(request?.creatorId ?: "", response.responderId)
-            )
-            val convId = firebase.createConversation(conversation)
+            val creatorId = request?.creatorId ?: ""
+
+            // Prevent duplicate match: check if one already exists between these users for this request
+            val existingMatches = firebase.getUserMatches(creatorId)
+            val duplicateMatch = existingMatches.find { match ->
+                match.requestId == requestId &&
+                ((match.user1Id == creatorId && match.user2Id == response.responderId) ||
+                 (match.user1Id == response.responderId && match.user2Id == creatorId))
+            }
+            if (duplicateMatch == null) {
+                // Only create match if one doesn't already exist
+                val match = Match(
+                    user1Id = creatorId,
+                    user2Id = response.responderId,
+                    requestId = requestId,
+                    matchScore = 0.85f
+                )
+                firebase.createMatch(match)
+            }
+
+            // Prevent duplicate conversation: check if one already exists with these members
+            val existingConvs = firebase.getUserConversations(creatorId)
+            val duplicateConv = existingConvs.find { conv ->
+                conv.memberIds.containsAll(listOf(creatorId, response.responderId)) &&
+                conv.memberIds.size == 2
+            }
+            val convId = if (duplicateConv != null) {
+                duplicateConv.id
+            } else {
+                val conversation = Conversation(
+                    isGroup = false,
+                    createdBy = creatorId,
+                    memberIds = listOf(creatorId, response.responderId)
+                )
+                firebase.createConversation(conversation)
+            }
             // Update accepted count
             request?.let {
                 val newCount = it.acceptedCount + 1
@@ -332,11 +378,20 @@ class CampusBuddyRepository {
 
     // Streak
     private suspend fun updateStreak(userId: String) {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val todayActivity = firebase.getActivityForDate(userId, today)
+        // If already logged in today, streak is already updated
+        if (todayActivity.isNotEmpty()) {
+            return
+        }
+
         val yesterday = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             .format(Date(System.currentTimeMillis() - 86400000))
         val yesterdayActivity = firebase.getActivityForDate(userId, yesterday)
+        
         val profile = firebase.getUserProfile(userId) ?: return
         val newStreak = if (yesterdayActivity.isNotEmpty()) profile.currentStreak + 1 else 1
+        
         firebase.updateUserProfile(userId, mapOf("currentStreak" to newStreak))
 
         // Check milestones
@@ -359,8 +414,8 @@ class CampusBuddyRepository {
         val totalInteractions = matches.size
         if (totalInteractions == 0) return
 
+        val conversations = firebase.getUserConversations(userId)
         val completedInteractions = matches.count { match ->
-            val conversations = firebase.getUserConversations(userId)
             conversations.any { conv ->
                 conv.memberIds.contains(userId) && conv.memberIds.contains(
                     if (match.user1Id == userId) match.user2Id else match.user1Id

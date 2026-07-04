@@ -33,8 +33,22 @@ fun ChatsScreen(
     LaunchedEffect(Unit) {
         val user = repository.getCurrentFirebaseUser() ?: return@LaunchedEffect
         repository.getUserConversations(user.uid).onSuccess { convs ->
-            conversations = convs
-            convs.forEach { conv ->
+            // Deduplicate: keep only the first conversation per unique partner
+            val seenPartners = mutableSetOf<String>()
+            conversations = convs.filter { conv ->
+                // Always keep group conversations — only deduplicate 1-on-1 chats
+                if (conv.isGroup) return@filter true
+                val partnerId = conv.memberIds.find { it != user.uid }
+                if (partnerId == null) {
+                    true
+                } else if (partnerId in seenPartners) {
+                    false // Duplicate 1-on-1 conversation with same partner
+                } else {
+                    seenPartners.add(partnerId)
+                    true
+                }
+            }
+            conversations.forEach { conv ->
                 val partnerId = conv.memberIds.find { it != user.uid }
                 if (partnerId != null) {
                     repository.getUserProfile(partnerId).onSuccess {

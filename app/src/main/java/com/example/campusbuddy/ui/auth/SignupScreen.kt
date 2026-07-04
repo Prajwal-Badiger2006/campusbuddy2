@@ -360,7 +360,7 @@ fun SignupScreen(
                                 isLoading = true
                                 scope.launch {
                                     try {
-                                        withTimeout(30_000) {
+                                        withTimeout(60_000) {
                                             val result = repository.signup(
                                                 fullName, email, password, regNumber,
                                                 collegeName, department, year

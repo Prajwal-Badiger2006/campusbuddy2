@@ -172,7 +172,7 @@ fun AppTextField(
         onValueChange = onValueChange,
         label = { Text(label) },
         placeholder = if (placeholder.isNotEmpty()) {
-            @Composable { Text(placeholder) }
+            { Text(placeholder) }
         } else null,
         modifier = modifier.fillMaxWidth(),
         isError = isError,
@@ -188,10 +188,10 @@ fun AppTextField(
         singleLine = singleLine,
         maxLines = maxLines,
         leadingIcon = if (leadingIcon != null) {
-            @Composable { Icon(imageVector = leadingIcon!!, contentDescription = null) }
+            { Icon(imageVector = leadingIcon!!, contentDescription = null) }
         } else null,
         trailingIcon = if (trailingIcon != null) {
-            @Composable {
+            {
                 IconButton(onClick = { onTrailingIconClick?.invoke() }) {
                     Icon(imageVector = trailingIcon!!, contentDescription = null)
                 }

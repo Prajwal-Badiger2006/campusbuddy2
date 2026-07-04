@@ -2,6 +2,7 @@ package com.example.campusbuddy.ui.setup
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -26,8 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import com.example.campusbuddy.ui.components.AppPrimaryButton
-import com.example.campusbuddy.ui.theme.*
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
@@ -65,12 +64,10 @@ val onboardingItems = listOf(
     )
 )
 
-private val backgroundGradients = listOf(
-    listOf(Color(0xFFE8F5E9), Color(0xFFF1F8E9)),
-    listOf(Color(0xFFE8EAF6), Color(0xFFF3E5F5)),
-    listOf(Color(0xFFE0F2F1), Color(0xFFF1F8E9)),
-    listOf(Color(0xFFFFF3E0), Color(0xFFFFEBEE))
-)
+// Background colors derived from each page's theme for consistent contrast in all modes
+private val backgroundGradients = onboardingItems.map { item ->
+    listOf(item.pageColor, item.gradientEndColor)
+}
 
 @Composable
 fun OnboardingScreen(
@@ -79,7 +76,7 @@ fun OnboardingScreen(
     val pagerState = rememberPagerState(pageCount = { onboardingItems.size })
     val scope = rememberCoroutineScope()
 
-    // Interpolated background colors based on pager position
+    // Interpolated background colors based on pager position (using each page's theme colors)
     val pageOffset = pagerState.currentPage + pagerState.currentPageOffsetFraction
     val targetBgIndex = pageOffset.coerceIn(0f, (onboardingItems.size - 1).toFloat())
     val bgIndex = targetBgIndex.toInt().coerceAtMost(onboardingItems.size - 2)
@@ -95,7 +92,11 @@ fun OnboardingScreen(
         lerp(currentBgColors[1], nextBgColors[1], bgFraction.coerceIn(0f, 1f))
     }
 
-    Box(
+    // Text/UI colors for dark themed backgrounds
+    val textColor = Color.White
+    val textSecondaryColor = Color.White.copy(alpha = 0.8f)
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -104,30 +105,41 @@ fun OnboardingScreen(
                 )
             )
     ) {
+        val screenHeight = maxHeight
+        val isSmallScreen = screenHeight < 600.dp
+        val illustrationSize = if (isSmallScreen) 130.dp else 160.dp
+        val titleStyle = if (isSmallScreen) MaterialTheme.typography.headlineMedium
+            else MaterialTheme.typography.headlineLarge
+        val descriptionStyle = if (isSmallScreen) MaterialTheme.typography.bodyMedium
+            else MaterialTheme.typography.bodyLarge
+        val titleSpacing = if (isSmallScreen) 24.dp else 32.dp
+        val descSpacing = if (isSmallScreen) 8.dp else 12.dp
+
         // Skip button at top-right corner
         if (pagerState.currentPage < onboardingItems.size - 1) {
             TextButton(
                 onClick = onNavigateToHome,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 16.dp, end = 16.dp)
+                    .padding(top = 8.dp, end = 8.dp)
             ) {
                 Text(
                     text = "Skip",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = textSecondaryColor
                 )
             }
         }
 
-        // Main content: centered pager + indicators
+        // Main content: pager + indicators + button (all in flow, no overlay)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 40.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(top = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // HorizontalPager with dynamic transitions
             HorizontalPager(
@@ -143,7 +155,7 @@ fun OnboardingScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 32.dp)
+                        .padding(horizontal = 24.dp)
                         .graphicsLayer {
                             scaleX = scaleFactor
                             scaleY = scaleFactor
@@ -156,52 +168,42 @@ fun OnboardingScreen(
                     OnboardingIllustration(
                         pageIndex = page,
                         color = item.pageColor,
-                        modifier = Modifier.size(200.dp)
+                        modifier = Modifier.size(illustrationSize)
                     )
 
-                    Spacer(modifier = Modifier.height(40.dp))
+                    Spacer(modifier = Modifier.height(titleSpacing))
 
                     Text(
                         text = item.title,
-                        style = MaterialTheme.typography.headlineLarge,
+                        style = titleStyle,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = textColor
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(descSpacing))
 
                     Text(
                         text = item.description,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = descriptionStyle,
+                        color = textSecondaryColor,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 16.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Worm-style animated indicator
+            // Worm-style animated indicator (white on dark backgrounds)
             WormIndicator(
                 pageCount = onboardingItems.size,
                 currentPage = pagerState.currentPage,
                 pageOffset = pagerState.currentPageOffsetFraction
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
-        }
+            Spacer(modifier = Modifier.height(20.dp))
 
-        // Bottom buttons: Next / Get Started
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(horizontal = 24.dp, vertical = 32.dp)
-        ) {
-            AppPrimaryButton(
-                text = if (pagerState.currentPage == onboardingItems.size - 1) "Get Started"
-                else "Next",
+            // Next / Get Started button — white outlined style for dark backgrounds
+            OutlinedButton(
                 onClick = {
                     if (pagerState.currentPage < onboardingItems.size - 1) {
                         scope.launch {
@@ -210,8 +212,26 @@ fun OnboardingScreen(
                     } else {
                         onNavigateToHome()
                     }
-                }
-            )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 24.dp),
+                shape = RoundedCornerShape(4.dp),
+                border = BorderStroke(2.dp, Color.White),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    text = if (pagerState.currentPage == onboardingItems.size - 1) "Get Started"
+                    else "Next",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -258,7 +278,7 @@ private fun WormIndicator(
             for (i in 0 until pageCount) {
                 val x = i * (dotWidthPx + spacingPx)
                 drawRoundRect(
-                    color = Color.LightGray.copy(alpha = 0.5f),
+                    color = Color.White.copy(alpha = 0.35f),
                     topLeft = Offset(x, 0f),
                     size = Size(dotWidthPx, dotHeightPx),
                     cornerRadius = CornerRadius(dotHeightPx / 2)
@@ -268,7 +288,7 @@ private fun WormIndicator(
             // Draw animated worm (stretching pill)
             val wormWidth = dotWidthPx + (pageOffset.absoluteValue * (dotWidthPx + spacingPx * 2)).coerceIn(0f, dotWidthPx + spacingPx * 2)
             drawRoundRect(
-                color = Primary,
+                color = Color.White,
                 topLeft = Offset(animatedOffset, 0f),
                 size = Size(wormWidth.coerceAtLeast(dotWidthPx), dotHeightPx),
                 cornerRadius = CornerRadius(dotHeightPx / 2)
@@ -658,5 +678,3 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStreakFlame(
         center = Offset(center.x + radius * 0.55f, center.y + radius * 0.4f)
     )
 }
-
-

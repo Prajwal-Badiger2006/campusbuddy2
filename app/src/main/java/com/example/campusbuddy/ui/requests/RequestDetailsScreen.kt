@@ -77,9 +77,10 @@ fun RequestDetailsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
-                if (!req.description.isNullOrBlank()) {
+                val description = req.description
+                if (!description.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(req.description, style = MaterialTheme.typography.bodyMedium)
+                    Text(description, style = MaterialTheme.typography.bodyMedium)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -99,11 +100,12 @@ fun RequestDetailsScreen(
                     }
                 }
 
-                if (req.availability != null) {
+                val availability = req.availability
+                if (availability != null) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Availability", style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(req.availability!!, style = MaterialTheme.typography.bodyMedium)
+                    Text(availability, style = MaterialTheme.typography.bodyMedium)
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))

@@ -34,6 +34,9 @@ fun MyRequestDetailsScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showCloseDialog by remember { mutableStateOf(false) }
     var showAcceptDialog by remember { mutableStateOf<Pair<Long, String>?>(null) }
+    var isProcessing by remember { mutableStateOf(false) }
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
     val myRequestScope = rememberCoroutineScope()
 
     LaunchedEffect(requestId) {
@@ -73,11 +76,26 @@ fun MyRequestDetailsScreen(
             message = "Accept this partner? A match and conversation will be created.",
             confirmLabel = "Accept",
             onConfirm = {
+                if (isProcessing) return@ConfirmationDialog
+                isProcessing = true
                 val response = responses.find { it.id == responseId }
                 if (response != null) {
                     myRequestScope.launch {
                         repository.acceptResponse(response, requestId)
+                            .onSuccess {
+                                // Update local state to immediately show it as accepted
+                                responses = responses.map {
+                                    if (it.id == responseId) it.copy(status = ResponseStatus.ACCEPTED) else it
+                                }
+                                request = request?.copy(acceptedCount = (request?.acceptedCount ?: 0) + 1)
+                            }
+                            .onFailure {
+                                snackbarMessage = "Failed to accept. Please try again."
+                            }
+                        isProcessing = false
                     }
+                } else {
+                    isProcessing = false
                 }
                 showAcceptDialog = null
             },
@@ -85,7 +103,16 @@ fun MyRequestDetailsScreen(
         )
     }
 
+    // Show snackbar when message is set
+    LaunchedEffect(snackbarMessage) {
+        snackbarMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            snackbarMessage = null
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = { AppTopBar(title = "My Request", onBack = onBack) }
     ) { innerPadding ->
         if (isLoading) {
@@ -181,7 +208,11 @@ fun MyRequestDetailsScreen(
                                         OutlinedButton(
                                             onClick = {
                                                 myRequestScope.launch {
-                                                    repository.rejectResponse(response)
+                                                    repository.rejectResponse(response).onSuccess {
+                                                        responses = responses.map {
+                                                            if (it.id == response.id) it.copy(status = ResponseStatus.REJECTED) else it
+                                                        }
+                                                    }
                                                 }
                                             },
                                             shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
