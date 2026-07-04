@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "113589417098",
+    "project_id": "campusbuddy-fa045",
+    "storage_bucket": "campusbuddy-fa045.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:113589417098:android:664eeb31fb6dcf16172973",
+        "android_client_info": {
+          "package_name": "com.example.campusbuddy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5zMzuBrREyEvcWvkng1nk8eIckB1dg4o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
