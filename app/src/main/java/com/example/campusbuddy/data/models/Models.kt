@@ -1,13 +1,14 @@
 package com.example.campusbuddy.data.models
 
 import com.example.campusbuddy.data.enums.*
+import com.google.firebase.firestore.PropertyName
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class UserProfile(
     val id: String = "",
     val fullName: String = "",
-    val collegeEmail: String = "",
+    val email: String = "",
     val registrationNumber: String = "",
     val collegeName: String = "",
     val department: String = "",
@@ -18,6 +19,7 @@ data class UserProfile(
     val skills: List<String> = emptyList(),
     val availability: List<String> = emptyList(),
     val goals: List<String> = emptyList(),
+    @get:PropertyName("isVerifiedStudent")
     val isVerifiedStudent: Boolean = false,
     val status: UserStatus = UserStatus.UNVERIFIED,
     val role: UserRole = UserRole.USER,

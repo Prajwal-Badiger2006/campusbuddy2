@@ -65,3 +65,19 @@ object SettingsRoute
 
 @Serializable
 data class ReportUserRoute(val targetUserId: String, val targetUserName: String)
+
+// Email Verification
+@Serializable
+object EmailVerificationRoute
+
+// Source from which the ID scanner was launched, determines return navigation
+@Serializable
+enum class ScanSource {
+    ONBOARDING,  // From the signup/email-verification flow — return to Onboarding → Home
+    HOME,        // From the Home screen pop-up — return to Home
+    PROFILE      // From the Profile banner — return to Profile
+}
+
+// OCR Student ID Scanner — source indicates where to navigate back after completion
+@Serializable
+data class ScanIdRoute(val source: ScanSource = ScanSource.ONBOARDING)

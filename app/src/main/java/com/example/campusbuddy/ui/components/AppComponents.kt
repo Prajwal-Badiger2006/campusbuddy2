@@ -188,10 +188,10 @@ fun AppTextField(
         singleLine = singleLine,
         maxLines = maxLines,
         leadingIcon = if (leadingIcon != null) {
-            { Icon(imageVector = leadingIcon!!, contentDescription = null) }
+            @Composable { Icon(imageVector = leadingIcon!!, contentDescription = null) }
         } else null,
         trailingIcon = if (trailingIcon != null) {
-            {
+            @Composable {
                 IconButton(onClick = { onTrailingIconClick?.invoke() }) {
                     Icon(imageVector = trailingIcon!!, contentDescription = null)
                 }
@@ -564,64 +564,75 @@ fun RequestCard(
     acceptedCount: Int,
     postedTime: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    showStatus: Boolean = false,
-    status: RequestStatus? = null
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    modifier: Modifier = Modifier,        showStatus: Boolean = false,
+        status: RequestStatus? = null,
+        isVerifiedCreator: Boolean = false
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                RequestTypeBadge(type)
-                if (showStatus && status != null) {
-                    StatusBadge(status)
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+            shape = RoundedCornerShape(4.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    RequestTypeBadge(type)
+                    if (showStatus && status != null) {
+                        StatusBadge(status)
+                    }
                 }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (!subjectOrTopic.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = subjectOrTopic,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = "$creatorName · $department",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (showStatus) {
+                if (!subjectOrTopic.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "$acceptedCount/$neededCount filled",
+                        text = subjectOrTopic,
                         style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (acceptedCount >= neededCount) Tertiary else Secondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "$creatorName · $department",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (isVerifiedCreator) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Filled.Verified,
+                                contentDescription = "Verified",
+                                modifier = Modifier.size(14.dp),
+                                tint = VerifiedBadge
+                            )
+                        }
+                    }
+                    if (showStatus) {
+                        Text(
+                            text = "$acceptedCount/$neededCount filled",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (acceptedCount >= neededCount) Tertiary else Secondary
+                        )
+                    }
+                }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = postedTime,

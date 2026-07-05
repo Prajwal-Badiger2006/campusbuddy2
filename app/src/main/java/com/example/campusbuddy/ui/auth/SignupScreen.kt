@@ -42,7 +42,7 @@ private enum class SignupStep(val stepNumber: Int, val title: String) {
 @Composable
 fun SignupScreen(
     repository: CampusBuddyRepository,
-    onNavigateToProfileSetup: () -> Unit,
+    onNavigateToEmailVerification: () -> Unit,
     onNavigateToLogin: () -> Unit
 ) {
     // Form state
@@ -367,7 +367,7 @@ fun SignupScreen(
                                             )
                                             result.onSuccess {
                                                 isLoading = false
-                                                onNavigateToProfileSetup()
+                                                onNavigateToEmailVerification()
                                             }.onFailure { e ->
                                                 isLoading = false
                                                 errorMessage = e.message ?: "Signup failed"
@@ -546,7 +546,7 @@ private fun PersonalInfoStep(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             AppTextField(
                 value = fullName,
@@ -565,8 +565,8 @@ private fun PersonalInfoStep(
             AppTextField(
                 value = email,
                 onValueChange = onEmailChange,
-                label = "College Email",
-                placeholder = "you@college.edu",
+                label = "Email Address",
+                placeholder = "you@email.com",
                 isError = emailError,
                 errorMessage = when {
                     email.isNotEmpty() && !emailFormatValid -> "Enter a valid email address"
@@ -588,7 +588,7 @@ private fun PersonalInfoStep(
             if (email.isNotEmpty() && !emailFormatValid) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Email must include @ and a domain (e.g., .edu)",
+                    text = "Email must include @ and a domain (e.g., .com)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

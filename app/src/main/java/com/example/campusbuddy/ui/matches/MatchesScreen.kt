@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +17,7 @@ import com.example.campusbuddy.data.models.Match
 import com.example.campusbuddy.data.models.UserProfile
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
 import com.example.campusbuddy.ui.components.*
+import com.example.campusbuddy.ui.theme.VerifiedBadge
 
 @Composable
 fun MatchesScreen(
@@ -104,8 +106,19 @@ fun MatchesScreen(
                                     UserAvatar(photoUrl = it.profilePhotoUrl, name = it.fullName, size = 56)
                                     Spacer(modifier = Modifier.width(16.dp))
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(it.fullName, style = MaterialTheme.typography.bodyLarge,
-                                            fontWeight = FontWeight.SemiBold)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(it.fullName, style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.SemiBold)
+                                            if (it.isVerifiedStudent) {
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(
+                                                    Icons.Filled.Verified,
+                                                    contentDescription = "Verified",
+                                                    modifier = Modifier.size(16.dp),
+                                                    tint = VerifiedBadge
+                                                )
+                                            }
+                                        }
                                         Text("${it.department} · ${it.year}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)

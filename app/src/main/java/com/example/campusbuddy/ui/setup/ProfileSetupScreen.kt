@@ -10,8 +10,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.campusbuddy.data.local.UserPreferences
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
 import com.example.campusbuddy.ui.components.*
 import kotlinx.coroutines.launch
@@ -40,8 +42,7 @@ val goalOptions = listOf(
 @Composable
 fun ProfileSetupScreen(
     repository: CampusBuddyRepository,
-    onNavigateToOnboarding: () -> Unit,
-    onNavigateToHome: () -> Unit
+    onNavigateToOnboarding: () -> Unit
 ) {
     var bio by remember { mutableStateOf("") }
     var selectedInterests by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -53,6 +54,8 @@ fun ProfileSetupScreen(
     val canSave = selectedInterests.size >= 2 && selectedAvailability.size >= 1
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
+    val userPreferences = remember { UserPreferences(context) }
 
     Column(
         modifier = Modifier
@@ -166,7 +169,7 @@ fun ProfileSetupScreen(
             )
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Save button
+            // Save button — saves profile and navigates to onboarding
             AppPrimaryButton(
                 text = "Save & Continue",
                 onClick = {
@@ -174,14 +177,17 @@ fun ProfileSetupScreen(
                         isLoading = true
                         val user = repository.getCurrentFirebaseUser()
                         if (user != null) {
-                            repository.updateUserProfile(user.uid, mapOf(
+                            val updates = mutableMapOf<String, Any>(
                                 "bio" to bio,
                                 "interests" to selectedInterests,
                                 "skills" to selectedSkills,
                                 "availability" to selectedAvailability,
                                 "goals" to selectedGoals
-                            ))
+                            )
+                            repository.updateUserProfile(user.uid, updates)
                         }
+                        // Reset verification popup state so it shows for new users
+                        userPreferences.resetVerificationPopup()
                         isLoading = false
                         onNavigateToOnboarding()
                     }

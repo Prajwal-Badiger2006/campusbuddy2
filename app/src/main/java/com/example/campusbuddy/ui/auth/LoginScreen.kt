@@ -97,8 +97,8 @@ fun LoginScreen(
             AppTextField(
                 value = email,
                 onValueChange = { email = it; emailError = false; errorMessage = null },
-                label = "College Email",
-                placeholder = "you@college.edu",
+                label = "Email Address",
+                placeholder = "you@email.com",
                 isError = emailError,
                 keyboardType = KeyboardType.Email,
                 imeAction = ImeAction.Next,

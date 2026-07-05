@@ -13,9 +13,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.campusbuddy.data.enums.RequestStatus
+import com.example.campusbuddy.data.local.UserPreferences
 import com.example.campusbuddy.data.models.UserProfile
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
 import com.example.campusbuddy.ui.components.*
@@ -29,18 +32,36 @@ fun HomeScreen(
     onNavigateToRequestDetails: (Long) -> Unit,
     onNavigateToPartnerProfile: (String) -> Unit,
     onNavigateToNotifications: () -> Unit,
-    onNavigateToMatches: () -> Unit
+    onNavigateToMatches: () -> Unit,
+    onNavigateToScanId: () -> Unit = {}
 ) {
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
     var recommendedPartners by remember { mutableStateOf<List<UserProfile>>(emptyList()) }
     var openRequests by remember { mutableStateOf<List<com.example.campusbuddy.data.models.PartnerRequest>>(emptyList()) }
     var unreadCount by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
+    var showVerificationPopup by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val userPreferences = remember { UserPreferences(context) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show success snackbar if returning from completed ID scan
+    LaunchedEffect(Unit) {
+        if (userPreferences.shouldShowVerificationSuccess()) {
+            snackbarHostState.showSnackbar("Verification Successful! Badge Unlocked.")
+            userPreferences.clearVerificationSuccess()
+        }
+    }
 
     LaunchedEffect(Unit) {
         val currentUser = repository.getCurrentFirebaseUser() ?: return@LaunchedEffect
         repository.getUserProfile(currentUser.uid).onSuccess { profile ->
             userProfile = profile
+            // Show verification popup if user is not verified and hasn't seen the popup before
+            if (!profile.isVerifiedStudent && !userPreferences.hasSeenVerificationPopup()) {
+                showVerificationPopup = true
+            }
             repository.getRecommendedPartners(profile).onSuccess { partners ->
                 recommendedPartners = partners
             }
@@ -53,6 +74,7 @@ fun HomeScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("CampusBuddy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) },
@@ -104,11 +126,22 @@ fun HomeScreen(
             ) {
                 // Greeting
                 item {
-                    Text(
-                        text = "Hi, ${userProfile?.fullName?.split(" ")?.first() ?: "Student"}",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Hi, ${userProfile?.fullName?.split(" ")?.first() ?: "Student"}",
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (userProfile?.isVerifiedStudent == true) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                Icons.Filled.Verified,
+                                contentDescription = "Verified",
+                                modifier = Modifier.size(24.dp),
+                                tint = VerifiedBadge
+                            )
+                        }
+                    }
                 }
 
                 // Streak & Reliability badges
@@ -214,6 +247,73 @@ fun HomeScreen(
             }
         }
     }
+
+    // Verification Badge Popup — shown on first home screen visit when unverified
+    if (showVerificationPopup) {
+        AlertDialog(
+            onDismissRequest = { /* Prevent dismissing by clicking outside */ },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        Icons.Filled.Verified,
+                        contentDescription = null,
+                        tint = VerifiedBadge,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Get Your Verified Student Badge! 🛡️",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = "Verify your student status using your College ID to build trust and connect with more study partners.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Start
+                )
+            },
+            confirmButton = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            userPreferences.markVerificationPopupSeen()
+                            showVerificationPopup = false
+                            onNavigateToScanId()
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.QrCodeScanner,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Proceed", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            userPreferences.markVerificationPopupSeen()
+                            showVerificationPopup = false
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text("Do It Later", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            },
+            dismissButton = {},
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
 }
 
 @Composable
@@ -235,7 +335,22 @@ fun PartnerCard(
         ) {
             UserAvatar(photoUrl = partner.profilePhotoUrl, name = partner.fullName, size = 64)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(text = partner.fullName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(text = partner.fullName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                if (partner.isVerifiedStudent) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        Icons.Filled.Verified,
+                        contentDescription = "Verified",
+                        modifier = Modifier.size(16.dp),
+                        tint = VerifiedBadge
+                    )
+                }
+            }
             Text(text = "${partner.department} · ${partner.year}", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.height(8.dp))

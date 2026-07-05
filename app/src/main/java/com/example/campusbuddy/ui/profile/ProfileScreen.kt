@@ -9,9 +9,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.campusbuddy.data.enums.UserStatus
+import com.example.campusbuddy.data.local.UserPreferences
 import com.example.campusbuddy.data.models.UserProfile
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
 import com.example.campusbuddy.ui.components.*
@@ -25,11 +27,24 @@ fun ProfileScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToLogin: () -> Unit,
     onNavigateToMatches: () -> Unit,
-    onNavigateToNotifications: () -> Unit
+    onNavigateToNotifications: () -> Unit,
+    onNavigateToScanId: () -> Unit = {}
 ) {
     var userProfile by remember { mutableStateOf<UserProfile?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val userPreferences = remember { UserPreferences(context) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show success snackbar if returning from completed ID scan
+    LaunchedEffect(Unit) {
+        if (userPreferences.shouldShowVerificationSuccess()) {
+            snackbarHostState.showSnackbar("Verification Successful! Badge Unlocked.")
+            userPreferences.clearVerificationSuccess()
+        }
+    }
 
     LaunchedEffect(Unit) {
         val user = repository.getCurrentFirebaseUser() ?: return@LaunchedEffect
@@ -64,6 +79,7 @@ fun ProfileScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Profile") },
@@ -118,6 +134,61 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
+                // Verification Pending Banner — shown only when not verified
+                if (!userProfile!!.isVerifiedStudent) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Verification Pending",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                                Text(
+                                    text = "Complete your profile by verifying your student ID to unlock all features.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedButton(
+                                onClick = onNavigateToScanId,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.tertiary
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary)
+                            ) {
+                                Text(
+                                    text = "Verify Now",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 // Streak & Reliability
                 if (userProfile!!.currentStreak > 0) {
                     StreakCard(streak = userProfile!!.currentStreak)
@@ -163,6 +234,32 @@ fun ProfileScreen(
                 // Actions
                 AppPrimaryButton(text = "Edit Profile", onClick = onNavigateToEditProfile)
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // Scan Student ID button — only shown when not verified
+                if (!userProfile!!.isVerifiedStudent) {
+                    OutlinedButton(
+                        onClick = onNavigateToScanId,
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.tertiary
+                        )
+                    ) {
+                        Icon(
+                            Icons.Filled.QrCodeScanner,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Scan Student ID",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 AppSecondaryButton(text = "View Matches", onClick = onNavigateToMatches)
                 Spacer(modifier = Modifier.height(12.dp))

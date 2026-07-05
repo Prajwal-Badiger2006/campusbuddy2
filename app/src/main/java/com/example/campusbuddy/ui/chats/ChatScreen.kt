@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Verified
+import com.example.campusbuddy.ui.theme.VerifiedBadge
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -65,8 +67,19 @@ fun ChatScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(partner?.fullName ?: "Chat",
-                            style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(partner?.fullName ?: "Chat",
+                                style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                            if (partner?.isVerifiedStudent == true) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Filled.Verified,
+                                    contentDescription = "Verified",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = VerifiedBadge
+                                )
+                            }
+                        }
                         Text("Online", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.secondary)
                     }

@@ -43,9 +43,6 @@ class FirebaseService {
     }
 
     // === USER PROFILE ===
-    private fun userProfileRef(uid: String): CollectionReference =
-        db.collection("userProfiles").document(uid).collection("profile")
-
     suspend fun createUserProfile(profile: UserProfile) {
         db.collection("userProfiles").document(profile.id).set(profile).await()
     }

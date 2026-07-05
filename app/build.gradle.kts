@@ -66,6 +66,18 @@ dependencies {
     // Image loading
     implementation(libs.coil.compose)
 
+    // ML Kit Text Recognition (on-device OCR)
+    implementation(libs.mlkit.text.recognition)
+
+    // CameraX
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+
+    // Guava (needed for ListenableFuture used by CameraX)
+    implementation(libs.guava)
+
     // Accompanist
     implementation(libs.accompanist.systemuicontroller)
 

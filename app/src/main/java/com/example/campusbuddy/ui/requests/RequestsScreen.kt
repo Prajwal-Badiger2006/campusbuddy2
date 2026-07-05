@@ -30,11 +30,13 @@ fun RequestsScreen(
     var myRequests by remember { mutableStateOf<List<PartnerRequest>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isCurrentUserVerified by remember { mutableStateOf(false) }
 
     LaunchedEffect(selectedTab) {
         isLoading = true
         val user = repository.getCurrentFirebaseUser() ?: return@LaunchedEffect
         val profile = repository.getUserProfile(user.uid).getOrNull()
+        isCurrentUserVerified = profile?.isVerifiedStudent == true
 
         if (selectedTab == 0) {
             repository.getPartnerRequests(profile?.collegeName ?: "").onSuccess {
@@ -142,7 +144,8 @@ fun RequestsScreen(
                                     postedTime = formatTimeAgo(request.createdAt),
                                     onClick = { onNavigateToMyRequestDetails(request.id) },
                                     showStatus = true,
-                                    status = request.status
+                                    status = request.status,
+                                    isVerifiedCreator = isCurrentUserVerified
                                 )
                             }
                         }

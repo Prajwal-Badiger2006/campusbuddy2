@@ -67,7 +67,7 @@ val OnTertiaryFixed = Color(0xFF07006C)
 val OnTertiaryFixedVariant = Color(0xFF2F2EBE)
 
 // Custom app colors
-val VerifiedBadge = Color(0xFF006C49)
+val VerifiedBadge = Color(0xFF1A73E8)
 val UnreadBadge = Color(0xFFBA1A1A)
 val OnlineIndicator = Color(0xFF006C49)
 val SkeletonGray = Color(0xFFD3E3FF)

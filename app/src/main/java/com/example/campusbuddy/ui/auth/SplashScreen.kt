@@ -40,9 +40,12 @@ fun SplashScreen(
         profileResult.onSuccess { profile ->
             if (profile.status == com.example.campusbuddy.data.enums.UserStatus.BANNED) {
                 onNavigateToLogin()
-            } else if (profile.fullName.isNotEmpty() && profile.department.isNotEmpty()) {
+            } else if (profile.interests.isNotEmpty()) {
+                // Profile setup is complete (interests are selected during ProfileSetup)
+                // User has gone through the full onboarding flow — go straight to Home
                 onNavigateToHome()
             } else {
+                // User hasn't completed profile setup (never selected interests)
                 onNavigateToProfileSetup()
             }
         }.onFailure {

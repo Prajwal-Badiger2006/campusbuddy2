@@ -50,7 +50,7 @@ fun ForgotPasswordScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Enter your college email and we'll send you a reset link",
+                    text = "Enter your email address and we'll send you a reset link",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -76,7 +76,7 @@ fun ForgotPasswordScreen(
                     AppTextField(
                         value = email,
                         onValueChange = { email = it; errorMessage = null },
-                        label = "College Email",
+                        label = "Email Address",
                         keyboardType = KeyboardType.Email,
                         leadingIcon = Icons.Filled.Email
                     )

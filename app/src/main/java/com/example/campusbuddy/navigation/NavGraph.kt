@@ -23,10 +23,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.platform.LocalContext
+import com.example.campusbuddy.data.local.UserPreferences
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
 import com.example.campusbuddy.ui.auth.SplashScreen
 import com.example.campusbuddy.ui.auth.LoginScreen
 import com.example.campusbuddy.ui.auth.SignupScreen
+import com.example.campusbuddy.ui.auth.EmailVerificationScreen
 import com.example.campusbuddy.ui.auth.ForgotPasswordScreen
 import com.example.campusbuddy.ui.setup.*
 import com.example.campusbuddy.ui.home.HomeScreen
@@ -36,6 +39,8 @@ import com.example.campusbuddy.ui.profile.*
 import com.example.campusbuddy.ui.partner.PartnerProfileScreen
 import com.example.campusbuddy.ui.matches.MatchesScreen
 import com.example.campusbuddy.ui.notifications.NotificationsScreen
+import com.example.campusbuddy.ui.ocr.ScanIdScreen
+import com.example.campusbuddy.navigation.ScanSource
 import com.example.campusbuddy.ui.report.ReportUserScreen
 
 data class BottomNavItem(
@@ -67,7 +72,8 @@ fun CampusBuddyNavHost(
 
     val authScreens = listOf(
         SplashRoute::class, LoginRoute::class, SignupRoute::class,
-        ForgotPasswordRoute::class,
+        EmailVerificationRoute::class, ForgotPasswordRoute::class,
+        ScanIdRoute::class,
         ProfileSetupRoute::class, OnboardingRoute::class
     )
 
@@ -131,17 +137,17 @@ fun CampusBuddyNavHost(
                     repository = repository,
                     onNavigateToLogin = {
                         navController.navigate(LoginRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     },
                     onNavigateToHome = {
                         navController.navigate(HomeRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     },
                     onNavigateToProfileSetup = {
                         navController.navigate(ProfileSetupRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     }
                 )
@@ -154,7 +160,7 @@ fun CampusBuddyNavHost(
                     onNavigateToForgotPassword = { navController.navigate(ForgotPasswordRoute) },
                     onNavigateToHome = {
                         navController.navigate(HomeRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     }
                 )
@@ -163,8 +169,15 @@ fun CampusBuddyNavHost(
             composable<SignupRoute> {
                 SignupScreen(
                     repository = repository,
-                    onNavigateToProfileSetup = { navController.navigate(ProfileSetupRoute) { popUpTo(SplashRoute) { inclusive = true } } },
+                    onNavigateToEmailVerification = { navController.navigate(EmailVerificationRoute) { popUpTo(0) { inclusive = true } } },
                     onNavigateToLogin = { navController.popBackStack() }
+                )
+            }
+
+            composable<EmailVerificationRoute> {
+                EmailVerificationScreen(
+                    repository = repository,
+                    onNavigateToProfileSetup = { navController.navigate(ProfileSetupRoute) { popUpTo(0) { inclusive = true } } }
                 )
             }
 
@@ -181,12 +194,7 @@ fun CampusBuddyNavHost(
                     repository = repository,
                     onNavigateToOnboarding = {
                         navController.navigate(OnboardingRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
-                        }
-                    },
-                    onNavigateToHome = {
-                        navController.navigate(HomeRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     }
                 )
@@ -196,7 +204,7 @@ fun CampusBuddyNavHost(
                 OnboardingScreen(
                     onNavigateToHome = {
                         navController.navigate(HomeRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     }
                 )
@@ -214,7 +222,8 @@ fun CampusBuddyNavHost(
                         navController.navigate(PartnerProfileRoute(userId))
                     },
                     onNavigateToNotifications = { navController.navigate(NotificationsRoute) },
-                    onNavigateToMatches = { navController.navigate(MatchesRoute) }
+                    onNavigateToMatches = { navController.navigate(MatchesRoute) },
+                    onNavigateToScanId = { navController.navigate(ScanIdRoute(ScanSource.HOME)) }
                 )
             }
 
@@ -247,11 +256,12 @@ fun CampusBuddyNavHost(
                     onNavigateToSettings = { navController.navigate(SettingsRoute) },
                     onNavigateToLogin = {
                         navController.navigate(LoginRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     },
                     onNavigateToMatches = { navController.navigate(MatchesRoute) },
-                    onNavigateToNotifications = { navController.navigate(NotificationsRoute) }
+                    onNavigateToNotifications = { navController.navigate(NotificationsRoute) },
+                    onNavigateToScanId = { navController.navigate(ScanIdRoute(ScanSource.PROFILE)) }
                 )
             }
 
@@ -374,7 +384,7 @@ fun CampusBuddyNavHost(
                     onBack = { navController.popBackStack() },
                     onNavigateToLogin = {
                         navController.navigate(LoginRoute) {
-                            popUpTo(SplashRoute) { inclusive = true }
+                            popUpTo(0) { inclusive = true }
                         }
                     }
                 )
@@ -386,6 +396,50 @@ fun CampusBuddyNavHost(
                     targetUserId = args.targetUserId,
                     targetUserName = args.targetUserName,
                     repository = repository,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            // OCR Student ID Scanner — handles both onboarding and profile flows
+            composable<ScanIdRoute> { backStackEntry ->
+                val args = backStackEntry.toRoute<ScanIdRoute>()
+                val context = LocalContext.current
+                val prefs = remember { UserPreferences(context) }
+                ScanIdScreen(
+                    repository = repository,
+                    onScanComplete = {
+                        // Store success flag so the destination screen can show a snackbar
+                        prefs.setVerificationSuccess()
+                        when (args.source) {
+                            ScanSource.PROFILE -> {
+                                navController.navigate(ProfileRoute) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            }
+                            ScanSource.HOME -> {
+                                navController.navigate(HomeRoute) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            }
+                            ScanSource.ONBOARDING -> {
+                                navController.navigate(OnboardingRoute) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            }
+                        }
+                    },
+                    onSkip = {
+                        when (args.source) {
+                            ScanSource.PROFILE, ScanSource.HOME -> {
+                                navController.popBackStack()
+                            }
+                            ScanSource.ONBOARDING -> {
+                                navController.navigate(OnboardingRoute) {
+                                    popUpTo(0) { inclusive = true }
+                                }
+                            }
+                        }
+                    },
                     onBack = { navController.popBackStack() }
                 )
             }

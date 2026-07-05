@@ -23,7 +23,7 @@ class CampusBuddyRepository {
             val profile = UserProfile(
                 id = user.uid,
                 fullName = fullName,
-                collegeEmail = email,
+                email = email,
                 registrationNumber = regNumber,
                 collegeName = collegeName,
                 department = department,

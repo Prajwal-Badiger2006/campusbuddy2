@@ -13,6 +13,10 @@ kotlinxSerialization = "1.7.3"
 firebaseBom = "34.15.0"
 coilCompose = "2.7.0"
 accompanist = "0.36.0"
+mlkitTextRecognition = "16.0.1"
+camerax = "1.5.0"
+guava = "32.1.2-android"
+androidxActivity = "1.13.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +44,12 @@ firebase-storage = { group = "com.google.firebase", name = "firebase-storage" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
 accompanist-systemuicontroller = { group = "com.google.accompanist", name = "accompanist-systemuicontroller", version.ref = "accompanist" }
+mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
+camerax-core = { group = "androidx.camera", name = "camera-core", version.ref = "camerax" }
+camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
+camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
+guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
