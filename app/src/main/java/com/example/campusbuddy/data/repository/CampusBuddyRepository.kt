@@ -5,6 +5,7 @@ import com.example.campusbuddy.data.enums.*
 import com.example.campusbuddy.data.firebase.FirebaseService
 import com.example.campusbuddy.data.models.*
 import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -278,6 +279,20 @@ class CampusBuddyRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    // === REAL-TIME FLOWS ===
+
+    fun getMessagesFlow(conversationId: Long): Flow<List<Message>> {
+        return firebase.getMessagesFlow(conversationId)
+    }
+
+    fun getNotificationsFlow(userId: String): Flow<List<Notification>> {
+        return firebase.getNotificationsFlow(userId)
+    }
+
+    fun getMatchesFlow(userId: String): Flow<List<Match>> {
+        return firebase.getMatchesFlow(userId)
     }
 
     // Chats

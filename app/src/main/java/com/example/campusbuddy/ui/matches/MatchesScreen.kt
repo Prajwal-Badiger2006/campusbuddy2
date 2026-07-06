@@ -18,6 +18,7 @@ import com.example.campusbuddy.data.models.UserProfile
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
 import com.example.campusbuddy.ui.components.*
 import com.example.campusbuddy.ui.theme.VerifiedBadge
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
 fun MatchesScreen(
@@ -26,36 +27,44 @@ fun MatchesScreen(
     onNavigateToChat: (Long) -> Unit,
     onNavigateToPartnerProfile: (String) -> Unit
 ) {
-    var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
     var partners by remember { mutableStateOf<Map<String, UserProfile>>(emptyMap()) }
     var conversations by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
-        val user = repository.getCurrentFirebaseUser() ?: return@LaunchedEffect
-        repository.getUserMatches(user.uid).onSuccess { matchList ->
-            // Deduplicate: keep only the first match per unique (partnerId, requestId) pair
-            val seenPairs = mutableSetOf<Pair<String, Long>>()
-            matches = matchList.filter { match ->
-                val partnerId = if (match.user1Id == user.uid) match.user2Id else match.user1Id
-                val key = partnerId to match.requestId
-                if (key in seenPairs) false else {
-                    seenPairs.add(key)
-                    true
-                }
+    val currentUser = repository.getCurrentFirebaseUser()
+    val currentUserId = currentUser?.uid ?: ""
+
+    // Real-time matches via Flow
+    val allMatches by repository.getMatchesFlow(currentUserId)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+
+    // Deduplicate matches
+    val matches = remember(allMatches) {
+        val seenPairs = mutableSetOf<Pair<String, Long>>()
+        allMatches.filter { match ->
+            val partnerId = if (match.user1Id == currentUserId) match.user2Id else match.user1Id
+            val key = partnerId to match.requestId
+            if (key in seenPairs) false else {
+                seenPairs.add(key)
+                true
             }
-            matches.forEach { match ->
-                val partnerId = if (match.user1Id == user.uid) match.user2Id else match.user1Id
-                repository.getUserProfile(partnerId).onSuccess { profile ->
-                    partners = partners + (partnerId to profile)
-                }
+        }
+    }
+
+    // Load partner profiles and conversation mappings when matches change in real-time
+    LaunchedEffect(matches) {
+        val user = currentUser ?: return@LaunchedEffect
+        matches.forEach { match ->
+            val partnerId = if (match.user1Id == user.uid) match.user2Id else match.user1Id
+            repository.getUserProfile(partnerId).onSuccess { profile ->
+                partners = partners + (partnerId to profile)
             }
-            repository.getUserConversations(user.uid).onSuccess { convList ->
-                convList.forEach { conv ->
-                    val partnerId = conv.memberIds.find { it != user.uid }
-                    if (partnerId != null) {
-                        conversations = conversations + (partnerId to conv.id)
-                    }
+        }
+        repository.getUserConversations(user.uid).onSuccess { convList ->
+            convList.forEach { conv ->
+                val partnerId = conv.memberIds.find { it != user.uid }
+                if (partnerId != null) {
+                    conversations = conversations + (partnerId to conv.id)
                 }
             }
         }

@@ -22,6 +22,7 @@ import com.example.campusbuddy.data.models.Conversation
 import com.example.campusbuddy.data.models.Message
 import com.example.campusbuddy.data.models.UserProfile
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,13 +34,16 @@ fun ChatScreen(
     onNavigateToPartnerProfile: (String) -> Unit
 ) {
     var conversation by remember { mutableStateOf<Conversation?>(null) }
-    var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
     var partner by remember { mutableStateOf<UserProfile?>(null) }
     var currentUserId by remember { mutableStateOf("") }
     var messageText by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(true) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+
+    // Real-time messages via Flow
+    val messages by repository.getMessagesFlow(conversationId)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     LaunchedEffect(conversationId) {
         val user = repository.getCurrentFirebaseUser() ?: return@LaunchedEffect
@@ -53,13 +57,16 @@ fun ChatScreen(
             }
         }
 
-        repository.getMessages(conversationId).onSuccess {
-            messages = it
-            isLoading = false
-            scope.launch { listState.animateScrollToItem(maxOf(0, it.size - 1)) }
-        }
-
         repository.markMessagesAsRead(conversationId, user.uid)
+        isLoading = false
+    }
+
+    // Scroll to bottom when new messages arrive
+    val messageCount = messages.size
+    LaunchedEffect(messageCount) {
+        if (messageCount > 0) {
+            listState.animateScrollToItem(messageCount - 1)
+        }
     }
 
     Scaffold(
@@ -178,10 +185,7 @@ fun ChatScreen(
                                 scope.launch {
                                     repository.sendMessage(conversationId, currentUserId, messageText)
                                     messageText = ""
-                                    repository.getMessages(conversationId).onSuccess {
-                                        messages = it
-                                        listState.animateScrollToItem(maxOf(0, it.size - 1))
-                                    }
+                                    // Flow will automatically update messages list
                                 }
                             }
                         },

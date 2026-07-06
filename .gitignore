@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Environment variables (contains secrets & API keys)
+.env
+!.env.example

@@ -18,6 +18,7 @@ import com.example.campusbuddy.data.models.Notification
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
 import com.example.campusbuddy.ui.components.AppTopBar
 import com.example.campusbuddy.ui.components.EmptyState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
 @Composable
@@ -29,17 +30,12 @@ fun NotificationsScreen(
     onNavigateToMyRequests: () -> Unit,
     onNavigateToProfile: () -> Unit
 ) {
-    var notifications by remember { mutableStateOf<List<Notification>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
     val notifScope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        val user = repository.getCurrentFirebaseUser() ?: return@LaunchedEffect
-        repository.getNotifications(user.uid).onSuccess {
-            notifications = it
-        }
-        isLoading = false
-    }
+    val currentUserId = repository.getCurrentFirebaseUser()?.uid ?: ""
+    // Real-time notifications via Flow
+    val notifications by repository.getNotificationsFlow(currentUserId)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     Scaffold(
         topBar = {
@@ -52,7 +48,7 @@ fun NotificationsScreen(
                             val user = repository.getCurrentFirebaseUser() ?: return@TextButton
                             notifScope.launch {
                                 repository.markAllNotificationsAsRead(user.uid)
-                                notifications = notifications.map { it.copy(isRead = true) }
+                                // Flow will automatically update the UI when Firestore confirms
                             }
                         }) {
                             Text("Mark All Read")
@@ -63,12 +59,6 @@ fun NotificationsScreen(
         }
     ) { innerPadding ->
         when {
-            isLoading -> {
-                Box(modifier = Modifier.fillMaxSize().padding(innerPadding),
-                    contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
             notifications.isEmpty() -> {
                 EmptyState(
                     icon = Icons.Filled.NotificationsNone,

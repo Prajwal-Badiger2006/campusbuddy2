@@ -38,6 +38,8 @@ import androidx.camera.view.PreviewView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.campusbuddy.data.repository.CampusBuddyRepository
+import com.example.campusbuddy.data.vision.GeminiVisionService
+import com.example.campusbuddy.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,6 +93,10 @@ fun ScanIdScreen(
     }
 
     val ocrProcessor = remember { OcrProcessor() }
+    val geminiApiKey = remember { BuildConfig.GEMINI_API_KEY }
+    val geminiService = remember {
+        if (geminiApiKey.isNotBlank()) GeminiVisionService(geminiApiKey) else null
+    }
     val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
     val scope = rememberCoroutineScope()
 
@@ -397,6 +403,9 @@ fun ScanIdScreen(
                             isProcessing = true
                             statusText = "Processing..."
 
+                            if (scanSide == ScanSide.FRONT && geminiService != null) {
+                                statusText = "Analyzing with AI..."
+                            }
                             scope.launch {
                                 capture.takePicture(
                                     cameraExecutor,
@@ -405,17 +414,25 @@ fun ScanIdScreen(
                                             scope.launch {
                                                 processCapturedImage(
                                                     ocrProcessor = ocrProcessor,
+                                                    geminiService = geminiService,
                                                     imageProxy = image,
                                                     scanSide = scanSide,
                                                     scannedFrontData = scannedFrontData,
                                                     onResult = { studentIdData ->
-                                                        if (scanSide == ScanSide.FRONT) {
+                                                        if (studentIdData.isComplete) {
+                                                            // Cloud API extracted everything from one image
+                                                            isProcessing = false
+                                                            statusText = "Scan complete! Please review your details."
+                                                            finalScannedData = studentIdData
+                                                            showReviewDialog = true
+                                                        } else if (scanSide == ScanSide.FRONT) {
+                                                            // ML Kit front scan — proceed to back
                                                             scannedFrontData = studentIdData
                                                             scanSide = ScanSide.BACK
                                                             isProcessing = false
                                                             statusText = "Front scanned! Now flip your ID and scan the back."
                                                         } else {
-                                                            // Back side scanned successfully — show review dialog instead of saving immediately
+                                                            // ML Kit back scan or cloud fallback
                                                             isProcessing = false
                                                             statusText = "Scan complete! Please review your details."
                                                             finalScannedData = studentIdData
@@ -695,6 +712,7 @@ fun ScanIdScreen(
 
 private suspend fun processCapturedImage(
     ocrProcessor: OcrProcessor,
+    geminiService: GeminiVisionService?,
     imageProxy: ImageProxy,
     scanSide: ScanSide,
     scannedFrontData: StudentIdData?,
@@ -714,7 +732,23 @@ private suspend fun processCapturedImage(
             return
         }
 
-        // Recognize text
+        // ── Cloud API (Front side only) ──
+        // If available, try the Gemini Vision API for more accurate extraction.
+        // It can extract all fields from a single image, skipping the need for a back scan.
+        if (scanSide == ScanSide.FRONT && geminiService != null) {
+            val cloudResult = geminiService.extractStudentIdData(bitmap)
+            if (cloudResult.isSuccess) {
+                val data = cloudResult.getOrThrow()
+                if (data.hasAnyData) {
+                    // Return with isComplete = true (both frontScanned and backScanned are true)
+                    onResult(data)
+                    return
+                }
+            }
+            // Cloud extraction failed or returned no data — fall through to ML Kit
+        }
+
+        // ── ML Kit OCR Fallback ──
         val rawText = ocrProcessor.recognizeText(bitmap)
 
         if (rawText.isBlank()) {

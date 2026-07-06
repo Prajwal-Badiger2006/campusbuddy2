@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -18,6 +20,38 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // ── Load environment variables ──
+        // Gemini API key reads from .env first, with local.properties fallback.
+        // Firebase-specific vars are read ONLY from .env (google-services.json is the primary source).
+        fun loadFromEnv(key: String): String {
+            val envFile = rootProject.file(".env")
+            return if (envFile.exists()) {
+                Properties().apply {
+                    envFile.inputStream().use { load(it) }
+                }.getProperty(key, "")
+            } else ""
+        }
+
+        fun loadFromLocalProps(key: String): String {
+            val localPropsFile = rootProject.file("local.properties")
+            return if (localPropsFile.exists()) {
+                Properties().apply {
+                    localPropsFile.inputStream().use { load(it) }
+                }.getProperty(key, "")
+            } else ""
+        }
+
+        val geminiApiKey = loadFromEnv("GEMINI_API_KEY").ifEmpty { loadFromLocalProps("gemini.api.key") }
+        val firebaseStorageBucket = loadFromEnv("FIREBASE_STORAGE_BUCKET")
+        val firebaseProjectId = loadFromEnv("FIREBASE_PROJECT_ID")
+        val firebaseApiKey = loadFromEnv("FIREBASE_API_KEY")
+        val firebaseAppId = loadFromEnv("FIREBASE_APP_ID")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
+        buildConfigField("String", "FIREBASE_STORAGE_BUCKET", "\"$firebaseStorageBucket\"")
+        buildConfigField("String", "FIREBASE_PROJECT_ID", "\"$firebaseProjectId\"")
+        buildConfigField("String", "FIREBASE_API_KEY", "\"$firebaseApiKey\"")
+        buildConfigField("String", "FIREBASE_APP_ID", "\"$firebaseAppId\"")
     }
 
     buildTypes {
@@ -39,6 +73,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -46,6 +81,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)

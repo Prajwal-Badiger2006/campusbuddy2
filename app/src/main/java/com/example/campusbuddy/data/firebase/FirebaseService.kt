@@ -10,6 +10,9 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.text.SimpleDateFormat
 import java.util.*
@@ -189,6 +192,91 @@ class FirebaseService {
             .get()
             .await()
             .mapNotNull { it.toObject(Message::class.java) }
+    }
+
+    // === REAL-TIME FLOWS ===
+
+    /**
+     * Returns a [Flow] that emits the list of messages for a conversation
+     * whenever a change occurs in Firestore.
+     */
+    fun getMessagesFlow(conversationId: Long): Flow<List<Message>> = callbackFlow {
+        val subscription = messageRef
+            .whereEqualTo("conversationId", conversationId)
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val messages = snapshot.documents.mapNotNull { it.toObject(Message::class.java) }
+                    trySend(messages)
+                }
+            }
+        awaitClose { subscription.remove() }
+    }
+
+    /**
+     * Returns a [Flow] that emits the list of notifications for a user
+     * whenever a change occurs in Firestore.
+     */
+    fun getNotificationsFlow(userId: String): Flow<List<Notification>> = callbackFlow {
+        val subscription = notificationRef
+            .whereEqualTo("userId", userId)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(50)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val notifications = snapshot.documents.mapNotNull { it.toObject(Notification::class.java) }
+                    trySend(notifications)
+                }
+            }
+        awaitClose { subscription.remove() }
+    }
+
+    /**
+     * Returns a [Flow] that emits the list of matches for a user
+     * whenever a change occurs in Firestore (listens to both user1Id and user2Id).
+     */
+    fun getMatchesFlow(userId: String): Flow<List<Match>> = callbackFlow {
+        var matches1 = emptyList<Match>()
+        var matches2 = emptyList<Match>()
+
+        val reg1 = matchRef
+            .whereEqualTo("user1Id", userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    matches1 = snapshot.documents.mapNotNull { it.toObject(Match::class.java) }
+                    trySend(matches1 + matches2)
+                }
+            }
+
+        val reg2 = matchRef
+            .whereEqualTo("user2Id", userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    matches2 = snapshot.documents.mapNotNull { it.toObject(Match::class.java) }
+                    trySend(matches1 + matches2)
+                }
+            }
+
+        awaitClose {
+            reg1.remove()
+            reg2.remove()
+        }
     }
 
     suspend fun markMessagesAsRead(conversationId: Long, userId: String) {
