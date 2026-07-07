@@ -190,6 +190,7 @@ fun SignupScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(horizontal = 24.dp)
+                .imePadding()
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -243,7 +244,7 @@ fun SignupScreen(
                             onNameChange = { fullName = it; nameError = false },
                             nameError = nameError,
                             email = email,
-                            onEmailChange = { email = it },
+                            onEmailChange = { email = it; errorMessage = null },
                             emailError = emailError,
                             emailFormatValid = emailFormatValid,
                             regNumber = regNumber,
@@ -377,6 +378,30 @@ fun SignupScreen(
                                         isLoading = false
                                         errorMessage = "Request timed out. Please check your internet connection and try again."
                                     }
+                                }
+                            }
+                        } else if (currentStep == SignupStep.PERSONAL) {
+                            // On page 1 — validate fields, then check if email is already registered
+                            if (!validateStep()) return@AppPrimaryButton
+                            isLoading = true
+                            errorMessage = null
+                            scope.launch {
+                                try {
+                                    withTimeout(15_000) {
+                                        val emailExists = repository.checkEmailExists(email)
+                                        if (emailExists) {
+                                            isLoading = false
+                                            errorMessage = "This email is already registered. Try signing in instead."
+                                            emailError = true
+                                        } else {
+                                            isLoading = false
+                                            currentStep = SignupStep.ACADEMIC
+                                        }
+                                    }
+                                } catch (e: TimeoutCancellationException) {
+                                    isLoading = false
+                                    // On timeout, let the user proceed — the actual signup will catch duplicates
+                                    currentStep = SignupStep.ACADEMIC
                                 }
                             }
                         } else {

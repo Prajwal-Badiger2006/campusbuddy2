@@ -37,6 +37,8 @@ fun ReportUserScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .padding(24.dp)
         ) {
             Icon(

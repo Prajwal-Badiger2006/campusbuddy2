@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 enum class UserStatus {
     UNVERIFIED,
     VERIFIED,
+    PENDING_REVIEW,
     ALUMNI,
     BANNED
 }

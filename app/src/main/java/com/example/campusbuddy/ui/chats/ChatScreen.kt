@@ -16,7 +16,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import com.example.campusbuddy.data.models.Conversation
 import com.example.campusbuddy.data.models.Message
@@ -65,7 +67,19 @@ fun ChatScreen(
     val messageCount = messages.size
     LaunchedEffect(messageCount) {
         if (messageCount > 0) {
+            // Small delay so the layout has settled (IME padding, LazyColumn resize, etc.)
+            delay(50)
             listState.animateScrollToItem(messageCount - 1)
+        }
+    }
+
+    // Scroll to bottom when keyboard appears — read IME insets at composable level (snapshot-aware)
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(imeBottom) {
+        if (imeBottom > 0 && messages.isNotEmpty()) {
+            // Small delay to let layout settle after IME insets change
+            delay(100)
+            listState.animateScrollToItem(messages.size - 1)
         }
     }
 
@@ -107,10 +121,16 @@ fun ChatScreen(
             )
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
+        ) {
             // Messages
             if (isLoading) {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else {
@@ -121,6 +141,10 @@ fun ChatScreen(
                 ) {
                     items(messages) { message ->
                         val isCurrentUser = message.senderId == currentUserId
+                        // Cache formatted timestamp so it's not re-computed on every keystroke recomposition
+                        val formattedTime = remember(message.createdAt) {
+                            formatMessageTime(message.createdAt)
+                        }
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = if (isCurrentUser) Alignment.End else Alignment.Start
@@ -143,7 +167,7 @@ fun ChatScreen(
                                         else MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = formatMessageTime(message.createdAt),
+                                        text = formattedTime,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                                         else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -182,9 +206,10 @@ fun ChatScreen(
                     IconButton(
                         onClick = {
                             if (messageText.isNotBlank()) {
+                                val textToSend = messageText
+                                messageText = "" // Clear UI instantly (optimistic update)
                                 scope.launch {
-                                    repository.sendMessage(conversationId, currentUserId, messageText)
-                                    messageText = ""
+                                    repository.sendMessage(conversationId, currentUserId, textToSend)
                                     // Flow will automatically update messages list
                                 }
                             }
@@ -204,7 +229,11 @@ fun ChatScreen(
     }
 }
 
+private val timeFormatter = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
+
 fun formatMessageTime(timestamp: Long): String {
-    val sdf = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-    return sdf.format(java.util.Date(timestamp))
+    if (timestamp <= 0L) {
+        return "Sending..."
+    }
+    return timeFormatter.format(java.util.Date(timestamp))
 }

@@ -53,6 +53,8 @@ fun CreateRequestScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .padding(24.dp)
                 .verticalScroll(rememberScrollState())
         ) {

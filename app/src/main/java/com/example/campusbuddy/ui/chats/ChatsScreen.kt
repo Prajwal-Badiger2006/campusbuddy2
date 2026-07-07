@@ -82,7 +82,13 @@ fun ChatsScreen(
             )
         }
     ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
+        ) {
             AppSearchBar(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },

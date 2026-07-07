@@ -19,6 +19,7 @@ import com.example.campusbuddy.data.repository.CampusBuddyRepository
 import com.example.campusbuddy.ui.components.*
 import com.example.campusbuddy.ui.theme.VerifiedBadge
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 
 @Composable
 fun MatchesScreen(
@@ -61,12 +62,19 @@ fun MatchesScreen(
             }
         }
         repository.getUserConversations(user.uid).onSuccess { convList ->
+            // Bug 1 fix: Use same dedup logic as ChatsScreen — take the FIRST conversation per partner
+            val seenPartners = mutableSetOf<String>()
             convList.forEach { conv ->
                 val partnerId = conv.memberIds.find { it != user.uid }
-                if (partnerId != null) {
+                if (partnerId != null && partnerId !in seenPartners) {
                     conversations = conversations + (partnerId to conv.id)
+                    seenPartners.add(partnerId)
                 }
             }
+        }
+        // Bug 2 fix: Small delay to prevent empty-state flicker while Firebase loads
+        if (matches.isEmpty()) {
+            delay(500)
         }
         isLoading = false
     }

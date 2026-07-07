@@ -34,7 +34,10 @@ fun ForgotPasswordScreen(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(
+                modifier = Modifier.imePadding(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Icon(
                     imageVector = Icons.Filled.LockReset,
                     contentDescription = null,

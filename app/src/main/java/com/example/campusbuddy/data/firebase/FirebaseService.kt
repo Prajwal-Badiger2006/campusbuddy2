@@ -41,6 +41,17 @@ class FirebaseService {
         auth.currentUser?.delete()?.await()
     }
 
+    suspend fun isEmailRegistered(email: String): Boolean {
+        return try {
+            val result = auth.fetchSignInMethodsForEmail(email).await()
+            result.signInMethods?.isNotEmpty() == true
+        } catch (e: Exception) {
+            // Network error etc. — treat as not-registered so the signup proceeds
+            // and Firebase will surface the actual error at that point
+            false
+        }
+    }
+
     suspend fun sendPasswordReset(email: String) {
         auth.sendPasswordResetEmail(email).await()
     }

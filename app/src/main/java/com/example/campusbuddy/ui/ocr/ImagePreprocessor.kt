@@ -2,6 +2,9 @@ package com.example.campusbuddy.ui.ocr
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Matrix
+import android.graphics.Rect
+import android.graphics.RectF
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -14,44 +17,42 @@ import kotlin.math.sqrt
  * for printed text on student ID cards.
  *
  * Techniques used:
+ * - Viewfinder-aligned cropping to eliminate background noise
  * - Grayscale conversion
  * - Contrast Limited Adaptive Histogram Equalization (CLAHE) approximation
  * - Adaptive thresholding (Sauvola-like local binarization)
  * - Median filtering for noise reduction
- * - Light deskew correction via text projection analysis
  */
 object ImagePreprocessor {
 
     /**
      * Full pre-processing pipeline. Run this before passing the image to ML Kit OCR.
+     * Skips cropping since ML Kit works on the viewfinder-cropped image from the caller.
      *
-     * @param bitmap The original captured bitmap
+     * @param bitmap The captured bitmap (already cropped to viewfinder area)
      * @return Pre-processed bitmap with enhanced text clarity
      */
     suspend fun preprocessForOcr(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         var processed = bitmap
 
-        // Step 1: Ensure consistent input size (scale down if too large for performance)
-        processed = normalizeResolution(processed, maxDimension = 1200)
-
-        // Step 2: Convert to grayscale
+        // Step 1: Convert to grayscale
         processed = toGrayscale(processed)
 
-        // Step 3: Apply median blur to reduce sensor noise while preserving edges
+        // Step 2: Apply median blur to reduce sensor noise while preserving edges
         processed = medianBlur(processed, kernelSize = 3)
 
-        // Step 4: Enhance local contrast (CLAHE approximation)
+        // Step 3: Enhance local contrast (CLAHE approximation)
         processed = enhanceContrast(processed, tileSize = 8, clipLimit = 3.0f)
 
-        // Step 5: Adaptive binarization (Sauvola method) for high-contrast text
+        // Step 4: Adaptive binarization (Sauvola method) for high-contrast text
         processed = sauvolaBinarize(processed, windowSize = 25, k = 0.2f)
 
         processed
     }
 
     /**
-     * Lightweight pre-processing for real-time preview analysis.
-     * Only converts to grayscale and adjusts contrast - faster than full pipeline.
+     * Lightweight pre-processing for real-time preview / ML Kit analysis.
+     * Only grayscale + contrast — faster than full pipeline.
      */
     suspend fun quickPreprocess(bitmap: Bitmap): Bitmap = withContext(Dispatchers.Default) {
         var processed = bitmap
@@ -61,22 +62,41 @@ object ImagePreprocessor {
     }
 
     /**
-     * Normalize resolution to a max dimension while maintaining aspect ratio.
-     * This ensures consistent processing time and avoids feeding huge bitmaps to ML Kit.
+     * Crop a full-camera-frame bitmap to the viewfinder rectangle area.
+     *
+     * The viewfinder is centered in the camera preview with width = 0.85f of the preview,
+     * and aspect ratio 1.6f (height = width / 1.6f).
+     *
+     * @param fullFrame The full-resolution camera frame bitmap
+     * @param viewfinderWidthFraction Fraction of total width the viewfinder occupies (e.g., 0.85f)
+     * @param viewfinderAspectRatio Height/width ratio of the viewfinder (e.g., 1.6f)
+     * @return Cropped bitmap containing only the viewfinder area
      */
-    private fun normalizeResolution(bitmap: Bitmap, maxDimension: Int): Bitmap {
-        val width = bitmap.width
-        val height = bitmap.height
-        val scale = minOf(
-            maxDimension.toFloat() / width,
-            maxDimension.toFloat() / height,
-            1f // Don't upscale
-        )
-        if (scale >= 1f) return bitmap
+    fun cropToViewfinder(
+        fullFrame: Bitmap,
+        viewfinderWidthFraction: Float = 0.85f,
+        viewfinderAspectRatio: Float = 1.6f
+    ): Bitmap {
+        val frameW = fullFrame.width
+        val frameH = fullFrame.height
 
-        val newWidth = (width * scale).toInt()
-        val newHeight = (height * scale).toInt()
-        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        // Viewfinder is centered — calculate its pixel dimensions
+        val vfWidth = (frameW * viewfinderWidthFraction).toInt()
+        val vfHeight = (vfWidth.toFloat() / viewfinderAspectRatio).toInt()
+
+        // Center in the frame
+        val left = (frameW - vfWidth) / 2
+        val top = (frameH - vfHeight) / 2
+
+        // Clamp to valid bounds
+        val cropLeft = max(0, left)
+        val cropTop = max(0, top)
+        val cropWidth = min(vfWidth, frameW - cropLeft)
+        val cropHeight = min(vfHeight, frameH - cropTop)
+
+        if (cropWidth <= 0 || cropHeight <= 0) return fullFrame
+
+        return Bitmap.createBitmap(fullFrame, cropLeft, cropTop, cropWidth, cropHeight)
     }
 
     /**
@@ -106,9 +126,6 @@ object ImagePreprocessor {
 
     /**
      * Median blur filter for noise reduction while preserving edges.
-     * Replaces each pixel with the median value from its neighborhood.
-     * More effective than Gaussian blur for removing salt-and-pepper noise
-     * while keeping text edges sharp.
      */
     private fun medianBlur(bitmap: Bitmap, kernelSize: Int): Bitmap {
         if (kernelSize < 3 || kernelSize % 2 == 0) return bitmap
@@ -133,7 +150,6 @@ object ImagePreprocessor {
                         grayValues[idx++] = Color.red(pixels[py * width + px])
                     }
                 }
-                // Sort and take median
                 grayValues.sort()
                 val median = grayValues[neighborhoodSize / 2]
                 result[y * width + x] = Color.rgb(median, median, median)
@@ -147,11 +163,7 @@ object ImagePreprocessor {
 
     /**
      * Contrast enhancement using a CLAHE (Contrast Limited Adaptive Histogram Equalization)
-     * approximation. Works on local tiles to enhance text-background contrast
-     * while limiting noise amplification in uniform areas.
-     *
-     * @param tileSize Size of local tiles in pixels
-     * @param clipLimit Maximum contrast amplification factor
+     * approximation. Works on local tiles to enhance text-background contrast.
      */
     private fun enhanceContrast(bitmap: Bitmap, tileSize: Int, clipLimit: Float): Bitmap {
         val width = bitmap.width
@@ -159,14 +171,11 @@ object ImagePreprocessor {
         val pixels = IntArray(width * height)
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
-        // Extract grayscale values
         val gray = IntArray(width * height) { Color.red(pixels[it]) }
 
-        // Process each tile
         val tilesX = (width + tileSize - 1) / tileSize
         val tilesY = (height + tileSize - 1) / tileSize
 
-        // Build tile CDFs (Cumulative Distribution Functions)
         val tileCdfs = Array(tilesY) { Array(tilesX) { FloatArray(256) } }
 
         for (ty in 0 until tilesY) {
@@ -182,7 +191,6 @@ object ImagePreprocessor {
                     }
                 }
 
-                // Clip histogram to limit contrast amplification
                 val clipValue = (totalPixels.toFloat() / 256f * clipLimit).toInt()
                 var clippedPixels = 0
                 for (i in 0..255) {
@@ -192,13 +200,11 @@ object ImagePreprocessor {
                     }
                 }
 
-                // Redistribute clipped pixels evenly
                 val redistribution = clippedPixels / 256
                 for (i in 0..255) {
                     histogram[i] += redistribution
                 }
 
-                // Build CDF
                 val cdf = tileCdfs[ty][tx]
                 var cumulative = 0f
                 for (i in 0..255) {
@@ -208,13 +214,11 @@ object ImagePreprocessor {
             }
         }
 
-        // Apply bilinear interpolation between tile CDFs
         val result = IntArray(width * height)
         for (y in 0 until height) {
             for (x in 0 until width) {
                 val v = gray[y * width + x]
 
-                // Tile coordinates with fractional parts for interpolation
                 val fx = (x.toFloat() / tileSize) - 0.5f
                 val fy = (y.toFloat() / tileSize) - 0.5f
                 val tx0 = fx.toInt().coerceIn(0, tilesX - 2)
@@ -224,7 +228,6 @@ object ImagePreprocessor {
                 val fracX = fx - tx0
                 val fracY = fy - ty0
 
-                // Bilinear interpolation of CDF values
                 val cdf00 = tileCdfs[ty0][tx0][v]
                 val cdf10 = tileCdfs[ty0][tx1][v]
                 val cdf01 = tileCdfs[ty1][tx0][v]
@@ -244,15 +247,7 @@ object ImagePreprocessor {
     }
 
     /**
-     * Sauvola binarization — a local adaptive thresholding method that works well
-     * for documents with varying illumination. Computes a local threshold for each
-     * pixel based on the local mean and standard deviation.
-     *
-     * Formula: T(x,y) = m(x,y) * (1 + k * (s(x,y)/R - 1))
-     * where m = local mean, s = local standard deviation, k = 0.2, R = 128
-     *
-     * This produces cleaner text than global Otsu thresholding for ID cards
-     * that may have uneven lighting or shadows.
+     * Sauvola binarization — local adaptive thresholding for varying illumination.
      */
     private fun sauvolaBinarize(bitmap: Bitmap, windowSize: Int, k: Float): Bitmap {
         val width = bitmap.width
@@ -264,7 +259,6 @@ object ImagePreprocessor {
         val halfWindow = windowSize / 2
         val R = 128f
 
-        // Precompute integral image for fast local mean and variance
         val integral = Array(height + 1) { LongArray(width + 1) }
         val integralSq = Array(height + 1) { LongArray(width + 1) }
 
@@ -290,11 +284,9 @@ object ImagePreprocessor {
 
                 val area = ((x1 - x0 + 1) * (y1 - y0 + 1)).toLong()
 
-                // Local sum using integral image
                 val sum = integral[y1 + 1][x1 + 1] - integral[y0][x1 + 1]
                         - integral[y1 + 1][x0] + integral[y0][x0]
 
-                // Local sum of squares
                 val sumSq = integralSq[y1 + 1][x1 + 1] - integralSq[y0][x1 + 1]
                         - integralSq[y1 + 1][x0] + integralSq[y0][x0]
 
@@ -302,7 +294,6 @@ object ImagePreprocessor {
                 val variance = (sumSq.toFloat() / area) - (mean * mean)
                 val stdDev = sqrt(max(0f, variance))
 
-                // Sauvola threshold
                 val threshold = mean * (1f + k * (stdDev / R - 1f))
                 val binaryValue = if (gray[y * width + x].toFloat() < threshold) 0 else 255
 

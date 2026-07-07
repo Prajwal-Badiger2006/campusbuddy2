@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── User Profiles ──
+    // Users can read any profile, but can only write to their own.
+    // Critical verification fields (isVerifiedStudent, status) can ONLY be
+    // modified by the Admin SDK (Cloud Functions) — never by a client app.
+    match /userProfiles/{userId} {
+      allow read: if true;
+
+      // Authenticated users can update their own profile document.
+      // SECURITY: isVerifiedStudent and status must remain unchanged by the client.
+      // Only Cloud Functions (with admin SDK) are allowed to modify these fields.
+      allow update: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.isVerifiedStudent == resource.data.isVerifiedStudent
+        && request.resource.data.status == resource.data.status;
+
+      // Allow creation only for new users (their own document)
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Only admins can delete profiles
+      allow delete: if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // ── Partner Requests ──
+    match /partnerRequests/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // ── Partner Responses ──
+    match /partnerResponses/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // ── Matches ──
+    match /matches/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
+    // ── Conversations ──
+    match /conversations/{docId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.memberIds;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && request.auth.uid in resource.data.memberIds;
+      allow delete: if false; // Never delete conversations from client
+    }
+
+    // ── Messages ──
+    match /messages/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // ── Notifications ──
+    match /notifications/{docId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // ── Activity Logs ──
+    match /activityLogs/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if false; // Immutable logs
+      allow delete: if false;
+    }
+
+    // ── Reports ──
+    match /reports/{docId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if false;
+    }
+  }
+}

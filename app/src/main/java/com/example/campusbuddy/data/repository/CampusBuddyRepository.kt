@@ -15,6 +15,10 @@ class CampusBuddyRepository {
     // Auth
     fun getCurrentFirebaseUser(): FirebaseUser? = firebase.getCurrentUser()
 
+    suspend fun checkEmailExists(email: String): Boolean {
+        return firebase.isEmailRegistered(email)
+    }
+
     suspend fun signup(fullName: String, email: String, password: String, regNumber: String,
                         collegeName: String, department: String, year: String): Result<UserProfile> {
         var authCreated = false

@@ -16,11 +16,9 @@ import java.net.URL
  * Service that uses Google Gemini Flash API to extract structured student ID data
  * from a captured ID card image.
  *
- * This provides significantly better accuracy than ML Kit + Regex because Gemini
- * understands context — it can infer the correct field even if the text is misread
- * (e.g., "Nane: Prjwal" → correctly extracted as "Name: Prajwal").
- *
- * Usage requires a Gemini API key from https://aistudio.google.com/apikey
+ * Uses structured JSON output for reliable field extraction.
+ * Input images should already be cropped to the viewfinder area (by the caller)
+ * to eliminate background noise and maximize text resolution.
  */
 class GeminiVisionService(private val apiKey: String) {
 
@@ -32,7 +30,7 @@ class GeminiVisionService(private val apiKey: String) {
     /**
      * Send an ID card bitmap to Gemini Flash API and extract structured student data.
      *
-     * @param bitmap The captured ID card image (will be compressed before sending)
+     * @param bitmap The captured ID card image (should be viewfinder-cropped, full resolution)
      * @return Result containing StudentIdData on success, or an error message on failure
      */
     suspend fun extractStudentIdData(bitmap: Bitmap): Result<StudentIdData> =
@@ -44,13 +42,13 @@ class GeminiVisionService(private val apiKey: String) {
                     )
                 }
 
-                // 1. Compress bitmap to JPEG base64
+                // 1. Compress bitmap to JPEG base64 — NO downscaling, keep max quality
                 val base64Image = bitmapToBase64(bitmap)
                 if (base64Image == null) {
                     return@withContext Result.failure(Exception("Failed to compress image"))
                 }
 
-                // 2. Build the Gemini API request
+                // 2. Build the Gemini API request with structured JSON schema
                 val requestBody = buildJsonString(base64Image)
 
                 // 3. Make the API call
@@ -66,45 +64,23 @@ class GeminiVisionService(private val apiKey: String) {
 
     /**
      * Compress and encode a bitmap as a JPEG base64 string.
-     * Resizes to max 1024px on the longest side to reduce API costs and latency.
+     * Does NOT downscale — keeps full viewfinder-cropped resolution.
+     * Uses high-quality JPEG compression (90%) for best OCR accuracy.
      */
     private fun bitmapToBase64(bitmap: Bitmap): String? {
-        // Scale down for faster upload while maintaining quality for OCR
-        val maxDimension = 1024
-        val scale = minOf(
-            maxDimension.toFloat() / bitmap.width,
-            maxDimension.toFloat() / bitmap.height,
-            1f
-        )
-        val scaledBitmap = if (scale < 1f) {
-            Bitmap.createScaledBitmap(
-                bitmap,
-                (bitmap.width * scale).toInt(),
-                (bitmap.height * scale).toInt(),
-                true
-            )
-        } else {
-            bitmap
-        }
-
         val outputStream = ByteArrayOutputStream()
-        // JPEG at 85% quality — good balance of size and readability
-        scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 85, outputStream)
+        // JPEG at 90% quality — high quality for text readability, reasonable size
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
         val byteArray = outputStream.toByteArray()
-
-        if (bitmap !== scaledBitmap) {
-            scaledBitmap.recycle()
-        }
-
         return Base64.encodeToString(byteArray, Base64.NO_WRAP)
     }
 
     /**
-     * Build the Gemini API request JSON body.
+     * Build the Gemini API request JSON body with structured output instruction.
+     * The prompt uses a few-shot example to guide extraction and includes
+     * explicit field-level instructions for each of the 6 fields.
      */
     private fun buildJsonString(base64Image: String): String {
-        // Base64 charset (A-Za-z0-9+/) and padding (=) are all safe in JSON strings,
-        // so no escaping is needed.
         return """
         {
             "contents": [{
@@ -116,10 +92,30 @@ class GeminiVisionService(private val apiKey: String) {
                         }
                     },
                     {
-                        "text": "Extract the following fields from this Student ID card image. Return ONLY valid JSON with these exact keys, no markdown formatting, no code fences: fullName, registrationNumber, collegeName, department, year. Use empty strings for fields you cannot find. Do not include any explanation or markdown formatting in your response."
+                        "text": "You are analyzing a student ID card photo for data extraction. Extract the following fields from this image. Return ONLY valid JSON with exactly these 6 keys (use empty string for any field you cannot find): fullName, registrationNumber, collegeName, department, year, email.
+
+Field instructions:
+- fullName: The student's full name as printed on the card. Include middle names if present.
+- registrationNumber: The student ID / roll number / enrollment number — usually a combination of letters and digits.
+- collegeName: The name of the college, institute, or university.
+- department: The department, branch, programme, or major (e.g., 'Computer Science', 'BCA', 'BBA', 'Mechanical Engineering').
+- year: The year of study, batch year, or semester (e.g., '1st', '2nd', '3rd', '4th', '2024', '2026').
+- email: The student's email address printed on the card, if visible.
+
+CRITICAL RULES:
+1. Read the text exactly as printed — do not guess or infer values not written on the card.
+2. If a field is not visible or not printed on the card, use an empty string.
+3. Output ONLY a raw JSON object — no markdown, no code fences, no explanation.
+4. Example output: {\"fullName\":\"John Doe\",\"registrationNumber\":\"2021BCS1234\",\"collegeName\":\"ABC College of Engineering\",\"department\":\"Computer Science\",\"year\":\"3rd\",\"email\":\"john.doe@college.edu\"}"
                     }
                 ]
-            }]
+            }],
+            "generationConfig": {
+                "temperature": 0.1,
+                "topP": 1.0,
+                "topK": 1,
+                "maxOutputTokens": 256
+            }
         }
         """.trimIndent()
     }
@@ -139,12 +135,10 @@ class GeminiVisionService(private val apiKey: String) {
             connection.connectTimeout = 30_000
             connection.readTimeout = 30_000
 
-            // Write request body
             connection.outputStream.use { os ->
                 os.write(requestBody.toByteArray(Charsets.UTF_8))
             }
 
-            // Read response
             val responseCode = connection.responseCode
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 connection.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
@@ -161,25 +155,10 @@ class GeminiVisionService(private val apiKey: String) {
 
     /**
      * Parse the Gemini API response JSON and extract StudentIdData fields.
-     *
-     * Gemini response structure:
-     * {
-     *   "candidates": [{
-     *     "content": {
-     *       "parts": [{
-     *         "text": "{\"fullName\": \"...\", \"registrationNumber\": \"...\", ...}"
-     *       }]
-     *     }
-     *   }]
-     * }
-     *
-     * The LLM returns a JSON string embedded in the text field.
      */
     private fun parseGeminiResponse(responseJson: String): StudentIdData {
-        // First, parse the outer Gemini response envelope
         val geminiResponse = json.decodeFromString<GeminiApiResponse>(responseJson)
 
-        // Extract the text content from the first candidate
         val rawText = geminiResponse.candidates
             ?.firstOrNull()
             ?.content
@@ -188,8 +167,7 @@ class GeminiVisionService(private val apiKey: String) {
             ?.text
             ?: return StudentIdData()
 
-        // Strip markdown code fences if present (the prompt tells Gemini not to use them,
-        // but it sometimes does anyway)
+        // Strip markdown code fences if present
         val cleanedJson = rawText
             .trim()
             .removePrefix("```json")
@@ -206,16 +184,14 @@ class GeminiVisionService(private val apiKey: String) {
                 collegeName = extracted.collegeName?.trim() ?: "",
                 department = extracted.department?.trim() ?: "",
                 year = extracted.year?.trim() ?: "",
+                email = extracted.email?.trim() ?: "",
                 frontScanned = true,
                 backScanned = true
             )
         } catch (e: Exception) {
-            // If parsing fails, return empty data so the app can fall back
             StudentIdData()
         }
     }
-
-    // ── Gemini API response DTOs ──
 
     @Serializable
     data class GeminiApiResponse(
@@ -237,16 +213,13 @@ class GeminiVisionService(private val apiKey: String) {
         val text: String? = null
     )
 
-    /**
-     * Internal DTO for the JSON that Gemini returns inside the text field.
-     * All fields are nullable so that partial extraction doesn't crash parsing.
-     */
     @Serializable
     data class ExtractedStudentData(
         val fullName: String? = null,
         val registrationNumber: String? = null,
         val collegeName: String? = null,
         val department: String? = null,
-        val year: String? = null
+        val year: String? = null,
+        val email: String? = null
     )
 }
