@@ -43,8 +43,13 @@ class FirebaseService {
 
     suspend fun isEmailRegistered(email: String): Boolean {
         return try {
-            val result = auth.fetchSignInMethodsForEmail(email).await()
-            result.signInMethods?.isNotEmpty() == true
+            // Query Firestore userProfiles collection by email.
+            // This is more reliable than the deprecated fetchSignInMethodsForEmail API.
+            val snapshot = db.collection("userProfiles")
+                .whereEqualTo("email", email)
+                .get()
+                .await()
+            !snapshot.isEmpty
         } catch (e: Exception) {
             // Network error etc. — treat as not-registered so the signup proceeds
             // and Firebase will surface the actual error at that point

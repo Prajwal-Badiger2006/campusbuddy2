@@ -253,10 +253,7 @@ fun SignupScreen(
                             nameFocus = nameFocus,
                             emailFocus = emailFocus,
                             regFocus = regFocus,
-                            onNext = {
-                                focusManager.clearFocus()
-                                handleNext()
-                            }
+                            onKeyboardDone = { focusManager.clearFocus() }
                         )
 
                         SignupStep.ACADEMIC -> AcademicInfoStep(
@@ -537,7 +534,7 @@ private fun PersonalInfoStep(
     nameFocus: FocusRequester,
     emailFocus: FocusRequester,
     regFocus: FocusRequester,
-    onNext: () -> Unit
+    onKeyboardDone: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -628,7 +625,7 @@ private fun PersonalInfoStep(
                 isError = regError,
                 errorMessage = if (regError) "Registration number is required" else null,
                 imeAction = ImeAction.Done,
-                onImeAction = onNext,
+                onImeAction = onKeyboardDone,
                 leadingIcon = Icons.Filled.Badge,
                 modifier = Modifier.focusRequester(regFocus)
             )
